@@ -1,0 +1,13 @@
+[Unit]
+Description=Netwatch SSH tunnel
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/netwatch/agent.env
+ExecStart=/usr/bin/ssh -NT -p ${NETWATCH_SSH_PORT} -i /etc/netwatch/tunnel_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/netwatch/known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -L 127.0.0.1:8787:127.0.0.1:8787 netwatch-tunnel@${NETWATCH_SSH_HOST}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

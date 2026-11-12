@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>网络监控</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #101513; --panel: #171e1b; --raised: #1d2722; --line: #2a3830;
+    --text: #eff6f0; --muted: #a0b2a7; --accent: #87e2af; --warn: #f0c57b;
+  }
+  * { box-sizing: border-box }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px Inter, system-ui, sans-serif }
+  main { max-width: 1440px; margin: auto; padding: 0 32px 32px }
+  .topbar, .toolbar, .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px }
+  .topbar { min-height: 69px; border-bottom: 1px solid var(--line) }
+  h1, h2, h3, p { margin: 0 }
+  h1 { font-size: 19px; display: flex; align-items: center; gap: 10px }
+  h1::before { content: ''; width: 16px; height: 16px; border: 4px solid var(--accent); border-radius: 50%; box-sizing: border-box }
+  h2 { font-size: 17px }
+  h3 { font-size: 14px }
+  #status, .muted, .empty { color: var(--muted) }
+  #status { font-size: 12px; text-align: right }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0 28px }
+  .metric { margin: 0; padding: 15px 17px; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(135deg, var(--raised), var(--panel)) }
+  .metric dt { color: var(--muted); font-size: 12px }
+  .metric dd { margin: 8px 0 0; font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums }
+  .metric:first-child dd { color: var(--accent) }
+  .toolbar { margin-bottom: 12px }
+  .agent-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
+  .enroll-form { display: grid; gap: 10px }
+  .enroll-form label { display: grid; gap: 4px }
+  .enroll-form input, #agent-command { width: 100%; max-width: none }
+  #agent-command { min-height: 110px; resize: vertical; font: 12px ui-monospace, monospace }
+  #enroll-output { margin-top: 12px }
+  #enroll-output p { margin-bottom: 6px }
+  input, button { font: inherit; color: var(--text); border: 1px solid var(--line); border-radius: 7px; background: var(--raised) }
+  input { width: min(100%, 290px); padding: 8px 11px }
+  input::placeholder { color: var(--muted) }
+  button { padding: 5px 10px; cursor: pointer; white-space: nowrap }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent) }
+  button:hover { border-color: var(--accent); color: var(--accent) }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  .node { margin-bottom: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel) }
+  .workspace { display: grid; grid-template-columns: minmax(180px, 235px) minmax(0, 1fr); align-items: start; gap: 14px }
+  .agent-tree { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px }
+  .agent-tree button { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; width: 100%; gap: 5px 10px; text-align: left; padding: 9px; border-color: transparent; background: transparent; white-space: normal; overflow-wrap: anywhere }
+  .agent-tree button[aria-current="true"] { border-color: var(--line); background: var(--raised); color: var(--accent) }
+  .agent-tree button + button { margin-top: 3px }
+  .node-state { color: var(--accent); font-size: 12px }
+  .node-state.stale { color: var(--warn) }
+  .node-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 15px; overflow-wrap: anywhere }
+  .remark { overflow-wrap: anywhere }
+  .node-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 15px; border-top: 1px solid var(--line); font-size: 12px }
+  .table-wrap { overflow: auto; max-height: 56vh; border-top: 1px solid var(--line); border-radius: 0 0 12px 12px }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left }
+  td, th { padding: 8px 14px; border-bottom: 1px solid var(--line); vertical-align: middle }
+  th { position: sticky; top: 0; background: var(--raised); color: var(--muted); white-space: nowrap; font-size: 12px; font-weight: 550 }
+  tr:last-child td { border-bottom: 0 }
+  tbody tr:hover { background: #1c2520 }
+  .users { max-width: 260px; overflow-wrap: anywhere }
+  .users summary { cursor: pointer; color: var(--accent) }
+  .users ul { margin: 6px 0 0; padding-left: 18px }
+  .users li + li { margin-top: 4px }
+  .action-cell { text-align: right }
+  .download-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px }
+  .download-controls input { width: 105px }
+  .download-controls[hidden] { display: none }
+  .empty { padding: 18px 15px }
+  dialog { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(100%, 640px); height: 100dvh; max-height: none; max-width: none; border: 0; border-left: 1px solid var(--line); padding: 0; background: var(--bg); color: var(--text) }
+  dialog::backdrop { background: #080d0ab5 }
+  .detail-header { position: sticky; top: 0; background: var(--panel); z-index: 2; border-bottom: 1px solid var(--line) }
+  .dialog-heading { padding: 17px 18px 12px; overflow-wrap: anywhere }
+  .detail-nav { display: flex; gap: 6px; padding: 0 18px 12px }
+  .detail-nav button { flex: 1 }
+  .dialog-body { padding: 16px 18px }
+  .detail-card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); min-width: 0 }
+  .detail-card + .detail-card { margin-top: 12px }
+  .detail-card > h3, .detail-card-body { padding: 12px 14px }
+  .detail-card > h3 { border-bottom: 1px solid var(--line) }
+  .detail-card .table-wrap { max-height: 55vh; border-top: 0 }
+  .detail-card td { white-space: nowrap }
+  .detail-card td:first-child { font: 12px ui-monospace, monospace }
+  .history-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px }
+  .history-range input { width: auto; max-width: 100%; margin-left: 4px }
+  #history > p { padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted) }
+  #action-status:not(:empty), #detail-status:not(:empty) { padding: 8px 0; color: var(--accent) }
+  @media (max-width: 680px) {
+    main { padding: 0 14px 20px }
+    .topbar { min-height: 57px }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0 20px }
+    .metric { padding: 11px 13px }
+    .metric dd { font-size: 23px }
+    .toolbar input { min-width: 0; width: 62% }
+    .table-wrap { max-height: 60vh }
+    .workspace { grid-template-columns: minmax(0, 1fr) }
+    .agent-tree { display: flex; gap: 5px; overflow-x: auto }
+    .agent-tree button { width: auto; min-width: max-content }
+    .agent-tree button + button { margin-top: 0 }
+    .inbounds td, .inbounds th { padding: 8px }
+  }
+</style>
+<main>
+<header class="topbar"><h1>网络监控</h1><p id="status" role="status">正在读取采样…</p></header>
+<dl class="metrics" aria-label="采集概览">
+  <div class="metric"><dt>正常采集 / 服务器</dt><dd id="nodes-total">—</dd></div>
+  <div class="metric"><dt>监控入站</dt><dd id="ports-total">—</dd></div>
+  <div class="metric"><dt>当前 TCP 连接</dt><dd id="tcp-total">—</dd></div>
+  <div class="metric"><dt>当前来源 IP</dt><dd id="ips-total">—</dd></div>
+</dl>
+<div class="toolbar"><div class="agent-tools"><h2>服务器</h2><button type="button" id="add-agent">添加 Agent</button></div><input id="filter" type="search" aria-label="搜索服务器、端口、用户或来源 IP" placeholder="搜索节点、端口、用户、IP"></div>
+<p id="action-status" role="status"></p>
+<div class="workspace"><nav id="agents" class="agent-tree" aria-label="Agent 列表"></nav><div id="hosts"></div></div>
+</main>
+<dialog id="enroll-dialog" aria-labelledby="enroll-title">
+<header class="dialog-heading"><h2 id="enroll-title"></h2><form method="dialog"><button>关闭</button></form></header>
+<div class="dialog-body">
+<form id="enroll-form" class="enroll-form">
+<label>节点 ID<input id="enroll-node" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*"></label>
+<label>显示名称<input id="enroll-name" required maxlength="80"></label>
+<label>Xray 配置路径<input id="enroll-config" required value="/usr/local/x-ui/bin/config.json"></label>
+<label>下载限速出口网卡（选填）<input id="enroll-interface" maxlength="15" placeholder="例如 ens17"></label>
+<button type="submit">生成部署命令</button>
+</form>
+<p id="enroll-status" role="status"></p>
+<div id="enroll-output" hidden>
+<p>在新 Agent 的终端运行。命令包含专用凭据，请妥善保管。</p>
+<textarea id="agent-command" readonly aria-label="Agent 部署命令"></textarea>
+<button type="button" id="copy-agent-command">复制命令</button>
+</div>
+</div>
+</dialog>
+<dialog id="restore-dialog" aria-labelledby="restore-title">
+<header class="dialog-heading"><h2 id="restore-title">恢复监控</h2><form method="dialog"><button>关闭</button></form></header>
+<div class="dialog-body">
+<form id="restore-form" class="enroll-form">
+<label>单 Agent JSON 备份<input id="restore-file" type="file" accept=".json,application/json" required></label>
+<button type="submit">预览恢复</button>
+</form>
+<p id="restore-status" role="status"></p>
+<ul id="restore-report"></ul>
+<button id="restore-confirm" type="button" hidden>确认恢复</button>
+</div>
+</dialog>
+<dialog id="details" aria-labelledby="selection">
+<header class="detail-header">
+<div class="dialog-heading"><h2 id="selection"></h2><form method="dialog"><button autofocus>关闭</button></form></div>
+<nav class="detail-nav" aria-label="端口详情">
+<button type="button" data-detail="live" aria-controls="detail-live">实时连接</button>
+<button type="button" data-detail="history" aria-controls="detail-history">来源历史</button>
+<button type="button" data-detail="controls" aria-controls="detail-controls">限速与封禁</button>
+</nav>
+</header>
+<div class="dialog-body">
+<p id="detail-status" role="status"></p>
+<div id="detail-live">
+<section class="detail-card" aria-labelledby="live-title">
+<h3 id="live-title">实时来源 IP</h3>
+<div id="sources" class="table-wrap"></div>
+</section>
+</div>
+<div id="detail-history" hidden>
+<section class="detail-card" aria-labelledby="history-title">
+<h3 id="history-title">来源 IP 记录</h3>
+<div class="detail-card-body">
+<button id="today" type="button">今天</button>
+<button id="all-history" type="button">全部历史</button>
+<form id="history-range" class="history-range">
+<label>从<input id="history-from" type="date"></label>
+<label>到<input id="history-to" type="date"></label>
+<button type="submit">查询日期</button>
+</form>
+</div>
+<div id="history" aria-live="polite"></div>
+</section>
+</div>
+<div id="detail-controls" hidden>
+<section class="detail-card" aria-labelledby="download-title">
+<h3 id="download-title">下载总限速</h3>
+<div class="detail-card-body">
+<p id="download-status" class="muted" role="status"></p>
+<form id="download-form" class="download-controls" hidden>
+<input id="download-mbps" type="number" min="1" max="10000" step="1" required aria-label="下载总限速 Mbps">
+<span class="muted">Mbps</span>
+<button type="submit">保存</button><button id="download-clear" type="button">解除限速</button>
+</form>
+</div>
+</section>
+<section class="detail-card" aria-labelledby="rules-title">
+<h3 id="rules-title">端口封禁</h3><div id="rules" class="table-wrap"></div>
+</section>
+</div>
+</div>
+</dialog>
+<script>
+const el = id => document.getElementById(id);
+const STALE_AFTER = 180;
+const isStale = host => Date.now() / 1000 - host.received > STALE_AFTER;
+const date = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'medium'
+});
+let selected;
+let current = [];
+let activeNode;
+const expandedUsers = new Set();
+let pending = false;
+
+function actionButton(label, action) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.onclick = action;
+  return button;
+}
+
+async function manage(action, node, fields) {
+  if (pending) return;
+  pending = true;
+  const status = el(el('details').open ? 'detail-status' : 'action-status');
+  status.textContent = '正在保存…';
+  try {
+    const response = await fetch('/manage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Netwatch-Action': '1'},
+      body: JSON.stringify({action, node, ...fields})
+    });
+    if (!response.ok) throw new Error(response.status);
+    status.textContent = action === 'rename' ? '服务器名称已保存' : '规则已保存';
+    if (action === 'download_limit') el('download-mbps').value = '';
+    await update();
+  } catch {
+    status.textContent = '操作失败，请刷新后重试';
+  } finally {
+    pending = false;
+  }
+}
+
+function hasRule(rules, port, ip) {
+  return (rules || []).some(([number, source]) => number === port && source === ip);
+}
+async function get(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(response.status);
+  return response.json();
+}
+function sourceTable(target, headers, rows, emptyMessage = '暂无来源 IP') {
+  target.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = emptyMessage;
+    target.append(empty);
+    return;
+  }
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  for (const title of headers) {
+    const th = document.createElement('th');
+    th.textContent = title;
+    head.append(th);
+  }
+  const body = table.createTBody();
+  for (const values of rows) {
+    const row = body.insertRow();
+    for (const value of values) {
+      const cell = row.insertCell();
+      if (value instanceof Node) cell.append(value);
+      else cell.textContent = value;
+    }
+  }
+  target.append(table);
+}
+function sourceAction(host, port, ip) {
+  const blocked = hasRule(host.blocks, port, ip);
+  if (port === 22 || (!blocked && !host.ports.some(row => row.port === port))) return '—';
+  return actionButton(blocked ? '解除封禁' : '拉黑', () => {
+    if (blocked || confirm('拉黑 ' + host.name + ' 的 TCP ' + port + ' 端口上的 ' + ip + '？')) {
+      manage(blocked ? 'unblock' : 'block', host.node, {port, ip});
+    }
+  });
+}
+
+function showSources() {
+  const host = current.find(item => item.node === selected.node);
+  if (!host) return;
+  const row = host.ports.find(port =>
+    port.port === selected.port && port.tag === selected.tag && port.listen === selected.listen);
+  el('selection').textContent = (row?.remark || host.name) + ' / ' + selected.port;
+  sourceTable(el('sources'), ['来源 IP', 'TCP 连接', '操作'],
+    Object.entries(row?.sources || {}).sort((a, b) => b[1] - a[1]).map(([ip, count]) =>
+      [ip, count, sourceAction(host, selected.port, ip)]),
+    row ? '当前采样没有已建立的 TCP 连接' : '当前采样中已无此入站');
+  const rules = new Set([...host.blocks, ...(host.applied || [])]
+    .filter(([port]) => port === selected.port).map(([, ip]) => ip));
+  const stale = isStale(host);
+  const desired = host.limits?.[selected.port];
+  const applied = host.download?.applied?.[selected.port];
+  const form = el('download-form');
+  form.hidden = !(desired || applied || (host.download && row && selected.port !== 22));
+  el('download-mbps').placeholder = desired || 'Mbps';
+  el('download-mbps').disabled = !host.download || !row;
+  form.querySelector('[type="submit"]').disabled = !host.download || !row;
+  el('download-clear').disabled = !desired;
+  const limitState = host.download?.error ? 'Agent 应用失败，正在重试'
+    : stale && (desired || applied) ? 'Agent 数据过期，等待确认'
+    : desired && desired === applied ? '已生效 · ' + desired + ' Mbps'
+    : desired ? '待生效 · ' + desired + ' Mbps'
+    : applied ? '待解除 · ' + applied + ' Mbps'
+    : host.download ? '不限速' : '此 Agent 尚未启用下载限速';
+  if (el('download-status').textContent !== limitState) el('download-status').textContent = limitState;
+  sourceTable(el('rules'), ['来源 IP', '状态', '操作'], [...rules].map(ip => {
+    const requested = hasRule(host.blocks, selected.port, ip);
+    const applied = hasRule(host.applied, selected.port, ip);
+    return [ip, requested ? (applied && !stale ? '已生效' : '待 Agent 确认') : '待解除',
+      requested ? sourceAction(host, selected.port, ip) : '—'];
+  }), '该端口没有封禁规则');
+}
+
+function renderHost(host, ports) {
+  const section = document.createElement('section');
+  section.className = 'node';
+  section.dataset.node = host.node;
+  const heading = document.createElement('h2');
+  heading.className = 'node-heading';
+  heading.textContent = host.name;
+  section.append(heading);
+  const actions = document.createElement('div');
+  actions.className = 'node-actions';
+  const sampled = document.createElement('span');
+  sampled.className = 'muted';
+  sampled.textContent = host.received ? '采样 ' + date.format(host.received * 1000) : '等待 Agent 上报';
+  actions.append(sampled);
+  actions.append(actionButton('改名', () => {
+    const name = prompt('服务器名称', host.name);
+    if (name?.trim()) manage('rename', host.node, {name: name.trim()});
+  }));
+  actions.append(actionButton('备份监控', () => backupAgent(host)));
+  actions.append(actionButton('恢复监控', () => showRestore(host)));
+  actions.append(actionButton('换机', () => showEnroll(host)));
+  section.append(actions);
+  const table = document.createElement('div');
+  table.className = 'table-wrap inbounds';
+  sourceTable(table, ['备注', '端口', '用户', '详情'], ports.map(port => {
+    const remark = document.createElement('span');
+    remark.className = 'remark';
+    remark.textContent = port.remark || (port.listen ? '—' : '已移除的入站');
+    const users = document.createElement('div');
+    users.className = 'users';
+    if (port.users.length) {
+      const key = JSON.stringify([host.node, port.port, port.listen, port.tag]);
+      const disclosure = document.createElement('details');
+      disclosure.open = expandedUsers.has(key);
+      disclosure.ontoggle = () => {
+        if (!disclosure.isConnected) return;
+        if (disclosure.open) expandedUsers.add(key);
+        else expandedUsers.delete(key);
+      };
+      const summary = document.createElement('summary');
+      summary.textContent = String(port.users.length);
+      const list = document.createElement('ul');
+      for (const user of port.users) {
+        const item = document.createElement('li');
+        item.textContent = user;
+        list.append(item);
+      }
+      disclosure.append(summary, list);
+      users.append(disclosure);
+    } else {
+      users.textContent = '—';
+    }
+    return [remark, port.port, users, actionButton('查看', () => {
+      selected = {node: host.node, port: port.port, listen: port.listen, tag: port.tag};
+      el('detail-status').replaceChildren();
+      el('download-mbps').value = '';
+      showSources();
+      el('details').showModal();
+      ++historyRequest;
+      el('history').replaceChildren();
+      el('history-range').reset();
+      showDetail('live');
+    })];
+  }), '没有匹配的入站');
+  for (const row of table.querySelectorAll('tr')) row.cells[3].className = 'action-cell';
+  section.append(table);
+  return section;
+}
+
+function renderHosts() {
+  const query = el('filter').value.trim().toLowerCase();
+  const matches = value => String(value).toLowerCase().includes(query);
+  const previous = el('hosts').firstElementChild;
+  const scroll = previous?.dataset.node === activeNode ? previous?.querySelector('.inbounds')?.scrollTop : 0;
+  const agents = el('agents');
+  agents.replaceChildren();
+  if (!current.some(host => host.node === activeNode)) activeNode = current[0]?.node;
+  for (const host of current) {
+    const status = isStale(host);
+    const item = actionButton(host.name, () => {
+      activeNode = host.node;
+      renderHosts();
+    });
+    item.setAttribute('aria-current', String(host.node === activeNode));
+    const state = document.createElement('span');
+    state.className = 'node-state' + (status ? ' stale' : '');
+    state.textContent = (!host.received ? '待上报' : status ? '过期' : '正常') + ' · ' + host.ports.length + ' 入站';
+    item.append(state);
+    agents.append(item);
+  }
+  const host = current.find(item => item.node === activeNode);
+  if (!host) {
+    el('hosts').textContent = '等待第一台服务器上报';
+    return;
+  }
+  const ports = [...host.ports];
+  const configured = [...Object.keys(host.limits || {}), ...Object.keys(host.download?.applied || {})].map(Number);
+  for (const port of new Set([...configured, ...[...host.blocks, ...(host.applied || [])].map(([number]) => number)])) {
+    if (!ports.some(row => row.port === port)) ports.push({port, users: [], sources: {}});
+  }
+  const filtered = matches(host.name) || matches(host.node) ? ports : ports.filter(port =>
+    [port.port, port.remark || '', port.tag || '', ...port.users, ...Object.keys(port.sources)].some(matches));
+  const section = renderHost(host, filtered);
+  el('hosts').replaceChildren(section);
+  section.querySelector('.inbounds').scrollTop = scroll || 0;
+}
+
+async function update() {
+  current = await get('/live');
+  const active = current.filter(host => !isStale(host));
+  const sources = active.flatMap(host => host.ports.flatMap(port => Object.entries(port.sources)));
+  el('nodes-total').textContent = active.length + ' / ' + current.length;
+  el('ports-total').textContent = current.reduce((count, host) => count + host.ports.length, 0);
+  el('tcp-total').textContent = sources.reduce((sum, [, count]) => sum + count, 0);
+  el('ips-total').textContent = new Set(sources.map(([ip]) => ip)).size;
+  const last = Math.max(0, ...current.map(host => host.received));
+  el('status').textContent = last ? '更新 ' + date.format(last * 1000) + ' · 北京时间' : '等待上报';
+  renderHosts();
+  if (selected && el('details').open) showSources();
+}
+
+let restore;
+function showRestore(host) {
+  restore = {node: host.node};
+  el('restore-form').reset();
+  el('restore-file').disabled = false;
+  el('restore-form').querySelector('button').disabled = false;
+  el('restore-title').textContent = '恢复监控 · ' + host.name;
+  el('restore-status').textContent = '';
+  el('restore-report').replaceChildren();
+  el('restore-confirm').hidden = true;
+  el('restore-dialog').showModal();
+}
+el('restore-file').onchange = () => {
+  restore.backup = null;
+  el('restore-status').textContent = '';
+  el('restore-report').replaceChildren();
+  el('restore-confirm').hidden = true;
+};
+async function restoreAgent(state, apply) {
+  const response = await fetch('/agent-restore', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Netwatch-Action': '1'},
+    body: JSON.stringify({node: state.node, backup: state.backup, apply})
+  });
+  if (response.status === 413) throw new Error('备份超过 8 MiB 上传限制');
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || '恢复失败');
+  if (restore !== state) return;
+  el('restore-status').textContent = apply ? '恢复完成' : '请核对恢复范围';
+  const lines = [
+    '匹配入站 ' + result.matched + ' 个，来源 IP 日记录 ' + result.source_rows + ' 条',
+    '新增封禁 ' + result.blocks + ' 条，新增限速 ' + result.limits + ' 条',
+    ...result.conflicts.map(rule => '端口 ' + rule.port + ' 保留现有 ' + rule.current + ' Mbps，备份为 ' + rule.backup + ' Mbps'),
+  ];
+  if (result.unmatched.length) lines.push('未匹配的端口 · ' + result.unmatched.join('、'));
+  const items = lines.map(line => {
+    const item = document.createElement('li');
+    item.textContent = line;
+    return item;
+  });
+  el('restore-report').replaceChildren(...items);
+  el('restore-confirm').hidden = apply || !result.matched;
+}
+el('restore-form').onsubmit = async event => {
+  event.preventDefault();
+  const state = restore;
+  const file = el('restore-file').files[0];
+  if (!file) return;
+  const button = event.submitter;
+  button.disabled = true;
+  el('restore-file').disabled = true;
+  el('restore-confirm').hidden = true;
+  el('restore-report').replaceChildren();
+  try {
+    if (file.size > 8 * 1024 * 1024) throw new Error('备份超过 8 MiB 上传限制');
+    try {
+      state.backup = JSON.parse(await file.text());
+    } catch {
+      throw new Error('请选择 Netwatch 导出的 JSON 备份');
+    }
+    await restoreAgent(state, false);
+  } catch (error) {
+    if (restore === state) el('restore-status').textContent = error.message;
+  } finally {
+    if (restore === state) {
+      button.disabled = false;
+      el('restore-file').disabled = false;
+    }
+  }
+};
+el('restore-confirm').onclick = async event => {
+  const state = restore;
+  const button = event.currentTarget;
+  button.disabled = true;
+  el('restore-file').disabled = true;
+  el('restore-form').querySelector('button').disabled = true;
+  try {
+    await restoreAgent(state, true);
+  } catch (error) {
+    if (restore === state) el('restore-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+    if (restore === state) {
+      el('restore-file').disabled = false;
+      el('restore-form').querySelector('button').disabled = false;
+    }
+  }
+};
+
+async function backupAgent(host) {
+  const status = el('action-status');
+  try {
+    const data = await get('/agent-backup?' + new URLSearchParams({node: host.node}));
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'netwatch-' + host.node + '-backup.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = '监控备份已导出';
+  } catch {
+    status.textContent = '监控备份失败';
+  }
+}
+
+function showEnroll(host) {
+  const form = el('enroll-form');
+  form.reset();
+  form.dataset.action = host ? 'replace_agent' : 'add_agent';
+  form.querySelector('button').disabled = false;
+  el('enroll-node').value = host?.node || '';
+  el('enroll-node').readOnly = !!host;
+  el('enroll-name').value = host?.name || '';
+  el('enroll-title').textContent = host ? 'Agent 换机' : '添加 Agent';
+  el('enroll-status').textContent = host ? '生成后旧凭据立即失效，历史、封禁和限速继续沿用。' : '';
+  el('agent-command').value = '';
+  el('enroll-output').hidden = true;
+  el('enroll-dialog').showModal();
+}
+el('add-agent').onclick = () => showEnroll();
+el('enroll-form').onsubmit = async event => {
+  event.preventDefault();
+  const action = event.currentTarget.dataset.action;
+  if (action === 'replace_agent' && !confirm('立即停用旧 Agent 的上报凭据并生成换机命令？')) return;
+  const button = event.submitter;
+  button.disabled = true;
+  const status = el('enroll-status');
+  status.textContent = '正在生成命令…';
+  try {
+    const response = await fetch('/manage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Netwatch-Action': '1'},
+      body: JSON.stringify({action, node: el('enroll-node').value, name: el('enroll-name').value,
+        config: el('enroll-config').value, interface: el('enroll-interface').value})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '生成失败');
+    el('agent-command').value = result.command;
+    el('enroll-output').hidden = false;
+    status.textContent = '命令已生成';
+  } catch (error) {
+    status.textContent = error.message;
+    button.disabled = false;
+  }
+};
+el('copy-agent-command').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(el('agent-command').value);
+    el('enroll-status').textContent = '已复制命令';
+  } catch {
+    el('agent-command').select();
+  }
+};
+
+el('filter').oninput = renderHosts;
+async function refresh() {
+  try {
+    if (!pending) await update();
+  } catch {
+    el('status').textContent = '刷新失败，表格保留上一次结果';
+  } finally {
+    setTimeout(refresh, 5000);
+  }
+}
+const detailButtons = document.querySelectorAll('[data-detail]');
+function showDetail(view) {
+  for (const button of detailButtons) {
+    const active = button.dataset.detail === view;
+    button.setAttribute('aria-pressed', String(active));
+    el(button.getAttribute('aria-controls')).hidden = !active;
+  }
+  if (view === 'history' && !el('history').hasChildNodes()) showHistory('today');
+}
+for (const button of detailButtons) button.onclick = () => showDetail(button.dataset.detail);
+
+let historyRequest = 0;
+async function showHistory(day, range = {}) {
+  const request = ++historyRequest;
+  const target = el('history');
+  const query = selected;
+  el('today').setAttribute('aria-pressed', String(day === 'today'));
+  el('all-history').setAttribute('aria-pressed', String(day === 'history' && !Object.keys(range).length));
+  if (!query.listen) {
+    target.textContent = '当前没有可查询的入站';
+    return;
+  }
+  target.textContent = '正在查询…';
+  try {
+    const result = await get('/' + day + '?' + new URLSearchParams({...query, ...range}));
+    if (request !== historyRequest) return;
+    target.replaceChildren();
+    const rows = Object.entries(result.sources).map(([ip, data]) => [
+      ip, date.format(data.first * 1000), date.format(data.last * 1000), data.peak
+    ]);
+    const summary = document.createElement('p');
+    const label = day === 'today' ? '今天' : '所选期间';
+    summary.textContent = result.samples
+      ? label + '观测到 ' + rows.length + ' 个来源 IP，TCP 采样峰值 ' + result.peak
+      : label + '没有此入站的采样';
+    target.append(summary);
+    if (result.samples) {
+      const list = document.createElement('div');
+      list.className = 'table-wrap';
+      sourceTable(list, ['来源 IP', '首次观测', '最近观测', 'TCP 采样峰值'], rows);
+      target.append(list);
+    }
+  } catch {
+    if (request === historyRequest) target.textContent = '查询失败';
+  }
+}
+el('download-form').onsubmit = event => {
+  event.preventDefault();
+  manage('download_limit', selected.node, {port: selected.port, mbps: el('download-mbps').valueAsNumber});
+};
+el('download-clear').onclick = () => manage('download_limit', selected.node, {port: selected.port, mbps: 0});
+el('today').onclick = () => showHistory('today');
+el('all-history').onclick = () => showHistory('history');
+el('history-range').onsubmit = event => {
+  event.preventDefault();
+  const from = el('history-from').value;
+  const to = el('history-to').value;
+  if (from && to && from > to) {
+    el('history').textContent = '开始日期不能晚于结束日期';
+    ++historyRequest;
+    return;
+  }
+  const range = {};
+  if (from) range.from = from;
+  if (to) range.to = to;
+  showHistory('history', range);
+};
+refresh();
+</script>

@@ -1,0 +1,19 @@
+[Unit]
+Description=Netwatch main server
+After=network.target
+
+[Service]
+User=netwatch
+Group=netwatch
+StateDirectory=netwatch
+StateDirectoryMode=0700
+UMask=0077
+EnvironmentFile=/etc/netwatch/server.env
+ExecStart=/usr/bin/python3 /opt/netwatch/netwatch.py server --db /var/lib/netwatch/netwatch.db
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

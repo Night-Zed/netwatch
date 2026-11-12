@@ -1,0 +1,14 @@
+[Unit]
+Description=Netwatch Agent
+Wants=netwatch-tunnel.service
+After=netwatch-tunnel.service
+
+[Service]
+EnvironmentFile=/etc/netwatch/agent.env
+ExecStart=/usr/bin/python3 /opt/netwatch/netwatch.py agent --node ${NETWATCH_NODE_ID} --url http://127.0.0.1:8787 --config ${NETWATCH_XRAY_CONFIG}
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

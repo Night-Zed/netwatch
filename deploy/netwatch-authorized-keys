@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+import sqlite3
+import sys
+
+if len(sys.argv) != 2 or not sys.argv[1].startswith("SHA256:"):
+    sys.exit(0)
+with sqlite3.connect("file:/var/lib/netwatch/netwatch.db?mode=ro", uri=True) as db:
+    row = db.execute("SELECT public_key FROM agent_credentials WHERE fingerprint = ?", (sys.argv[1],)).fetchone()
+if row:
+    print('restrict,port-forwarding,permitopen="127.0.0.1:8787",command="/bin/false" ' + row[0])

@@ -2,6 +2,16 @@
 
 适用于 Debian 系 Linux、Python 3.9+、systemd。主控安装 Nginx、OpenSSH 服务端和 SQLite 工具。Agent 需要 OpenSSH 客户端、`ss`、`nft`，启用下载限速时还需要 `ip`、`tc` 和内核 IFB 支持。主控使用独立服务账户。Agent 用 root 读取 Xray 配置并应用封禁和限速。
 
+## 新主控快速安装
+
+从私有仓库的固定版本 Release 下载并解压部署 ZIP，在解压目录执行以下命令。参数依次为面板域名、Agent 可直连的 SSH 地址、SSH 端口和证书联系邮箱。
+
+```sh
+sudo bash deploy/install-server.sh monitor.example.com 192.0.2.10 22 admin@example.com
+```
+
+先将域名解析到主控，开放公网 80、443 以及 Agent 所需的 SSH 端口。安装失败后可用相同参数重试。安装器适用于新主控。已有部署请按下文的备份和迁移步骤处理。
+
 ## 主控
 
 1. 创建服务账户 `netwatch`，禁用交互登录。另建 `netwatch-tunnel` 账户用于 Agent 的 SSH 转发。

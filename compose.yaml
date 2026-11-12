@@ -1,9 +1,12 @@
 services:
   main:
-    image: netwatch-main:${NETWATCH_IMAGE_TAG:-0.1.2}
+    image: netwatch-main:${NETWATCH_IMAGE_TAG:-0.1.3}
     build:
       context: .
       dockerfile: deploy/Dockerfile
+      args:
+        NETWATCH_UID: "${NETWATCH_UID:?set host netwatch UID}"
+        NETWATCH_GID: "${NETWATCH_GID:?set host netwatch GID}"
     user: "${NETWATCH_UID:?set host netwatch UID}:${NETWATCH_GID:?set host netwatch GID}"
     env_file: /etc/netwatch/server.env
     restart: unless-stopped

@@ -1,0 +1,12 @@
+services:
+  web:
+    volumes:
+      - /etc/netwatch/ipbest.Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - default
+      - netwatch_proxy
+
+networks:
+  netwatch_proxy:
+    external: true
+    name: netwatch-proxy

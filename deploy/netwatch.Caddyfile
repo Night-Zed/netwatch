@@ -1,0 +1,19 @@
+monitor.example.com {
+    encode zstd gzip
+
+    @ingest path /ingest /ingest/*
+    handle @ingest {
+        respond 404
+    }
+
+    handle /agent-restore {
+        request_body {
+            max_size 8MB
+        }
+        reverse_proxy netwatch-main:8787
+    }
+
+    handle {
+        reverse_proxy netwatch-main:8787
+    }
+}

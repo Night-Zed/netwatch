@@ -1,0 +1,35 @@
+services:
+  main:
+    image: netwatch-main:${NETWATCH_IMAGE_TAG:-0.1.2}
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    user: "${NETWATCH_UID:?set host netwatch UID}:${NETWATCH_GID:?set host netwatch GID}"
+    env_file: /etc/netwatch/server.env
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${NETWATCH_HOST_PORT:-8787}:8787"
+    volumes:
+      - /var/lib/netwatch-docker:/var/lib/netwatch
+      - /etc/ssh/ssh_host_ed25519_key.pub:/etc/ssh/ssh_host_ed25519_key.pub:ro
+    networks:
+      proxy:
+        aliases:
+          - netwatch-main
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  proxy:
+    external: true
+    name: netwatch-proxy

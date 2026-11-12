@@ -1,0 +1,8 @@
+**
+!netwatch.py
+!index.html
+!deploy/
+!deploy/Dockerfile
+!deploy/agent-install.sh
+!deploy/netwatch-agent.service
+!deploy/netwatch-tunnel.service

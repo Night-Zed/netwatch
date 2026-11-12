@@ -22,6 +22,12 @@ from urllib.request import Request, urlopen
 
 CHINA = timezone(timedelta(hours=8))
 PAGE = Path(__file__).with_name("index.html")
+DEPLOY_FILES = {
+    "agent-install.sh": PAGE.parent / "deploy" / "agent-install.sh",
+    "netwatch.py": Path(__file__),
+    "netwatch-agent.service": PAGE.parent / "deploy" / "netwatch-agent.service",
+    "netwatch-tunnel.service": PAGE.parent / "deploy" / "netwatch-tunnel.service",
+}
 SAMPLE_INTERVAL = 60
 
 
@@ -603,6 +609,11 @@ def run_server(args):
             url = urlsplit(self.path)
             if url.path == "/health":
                 return self.reply(200, {"ok": True})
+            if enrollment and url.path.startswith("/deploy/"):
+                file = DEPLOY_FILES.get(url.path.removeprefix("/deploy/"))
+                if file is None or not file.is_file():
+                    return self.reply(404, {})
+                return self.reply(200, file.read_bytes(), "application/octet-stream")
             if not self.admin():
                 return self.reply(401, {})
             if url.path == "/":
@@ -693,7 +704,7 @@ def run_server(args):
                 """, key)}
                 self.reply(200, {"samples": samples, "peak": peak, "sources": sources})
 
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    ThreadingHTTPServer((args.bind, args.port), Handler).serve_forever()
 
 
 def main():
@@ -702,6 +713,7 @@ def main():
     server = commands.add_parser("server")
     server.add_argument("--db", default="netwatch.db")
     server.add_argument("--port", type=int, default=8787)
+    server.add_argument("--bind", default="127.0.0.1")
     agent = commands.add_parser("agent")
     agent.add_argument("--url", default="http://127.0.0.1:8787")
     agent.add_argument("--node", required=True)
